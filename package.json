@@ -5,12 +5,8 @@
   "main": "index.js",
   "scripts": {
     "tsc": "./node_modules/typescript/bin/tsc",
-<<<<<<< HEAD
     "analyze": "node ./dist/js/index.js",
     "all": "./node_modules/typescript/bin/tsc && node ./dist"
-=======
-    "shake": "./node_modules/typescript/bin/tsc && node ./dist/app"
->>>>>>> test
   },
   "repository": {
     "type": "git",
