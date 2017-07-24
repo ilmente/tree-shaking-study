@@ -15,7 +15,7 @@ export default class Scanner {
         this.astStream.subscribe({
             next: (ast: babelTypes.File) => {
                 const astCollectionOriginal: jscodeshift.Collection = jscodeshift(ast);
-                const astModded = this.scanInvokedFn(astCollectionOriginal).getAST();
+                const astModded = this.scanASTCollection(astCollectionOriginal).getAST();
 
                 this.astStreamModded.next(astModded);
             }, 
@@ -28,52 +28,69 @@ export default class Scanner {
         });
     }
 
-    scanInvokedFn(astCollection: jscodeshift.Collection): jscodeshift.Collection {
-        const invokedFn: Subject<jscodeshift.CallExpression> = new Subject<jscodeshift.CallExpression>();
+    scanASTCollection(astCollection: jscodeshift.Collection): jscodeshift.Collection {
+        const identifiers: Subject<jscodeshift.Identifier> = new Subject<jscodeshift.Identifier>();
 
-        invokedFn.subscribe({
-            next: (value) => {
-                astCollection
-                    .find(jscodeshift.FunctionDeclaration, {
-                        id: {
-                            name: value
-                        }
-                    })
-                    .forEach(nodePath => {
-                        if (parseInt(nodePath['references']) > -1) {
-                            nodePath.references++;
-                        } else {
-                            nodePath['references'] = 1;
-                        }
-                    });
+        identifiers.subscribe({
+            next: (identifierNodePath) => {
+                const identifierName = identifierNodePath.node.name;
+
+                if (!this.isDeclaration(identifierNodePath.parent)) {
+                    astCollection
+                        .find(jscodeshift.FunctionDeclaration, {
+                            id: {
+                                name: identifierName
+                            }
+                        })
+                        .forEach(nodePath => {
+                            if (parseInt(nodePath['references']) > -1) {
+                                nodePath.references++;
+                            } else {
+                                nodePath['references'] = 1;
+                            }
+                        });
+                        
+                    astCollection
+                        .find(jscodeshift.VariableDeclarator, {
+                            id: {
+                                name: identifierName
+                            }
+                        })
+                        .forEach(nodePath => {
+                            if (parseInt(nodePath['references']) > -1) {
+                                nodePath.references++;
+                            } else {
+                                nodePath['references'] = 1;
+                            }
+                        });    
+                }
             },
             error: (err: Error) => {
                 console.error(err);
             },
             complete: () => {
-                console.log('Invoked functions stream completed');
+                console.log('Identifiers stream completed');
             }
         });
 
-        const invokedFnCollection: jscodeshift.Collection = this.getInvokedFn(astCollection);
-
-        invokedFnCollection.forEach(nodePath => {
-            invokedFn.next(nodePath.value.callee.name); 
-        });
+        astCollection
+            .find(jscodeshift.Identifier)
+            .forEach(nodePath => {
+                identifiers.next(nodePath); 
+            });
 
         return astCollection;
     }
 
-    getInvokedFn(astCollection: jscodeshift.Collection): jscodeshift.Collection {
-        return astCollection
-            .find(jscodeshift.CallExpression, {
-                callee: {
-                    type: 'Identifier'
-                }
-            });
+    getASTStream(): any {
+        return this.astStreamModded;
     }
 
-    getASTStream() {
-        return this.astStreamModded;
+    isDeclaration(nodePath: jscodeshift.NodePath): boolean {
+        if (nodePath && nodePath.node && nodePath.node.type && (nodePath.node.type == jscodeshift.VariableDeclarator || nodePath.node.type == jscodeshift.FunctionDeclaration)) {
+            return true;
+        }
+
+        return false;
     }
 }
