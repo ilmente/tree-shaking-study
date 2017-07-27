@@ -1,18 +1,17 @@
 
 import Crawler from './crawler';
 import Scanner from './scanner';
-import Epurator from './epurator';
+import Evaluator from './evaluator';
 
 const cwd = process.cwd();
-const crawler = new Crawler('./examples/fn/01');
-const astStream = crawler.getASTStream();
-const scanner = new Scanner(astStream);
-const astStreamModded = scanner.getASTStream();
+const crawler = new Crawler('./examples/fn/03');
+const evaluator = new Evaluator(crawler);
 
-astStreamModded.subscribe(ast => {
-    const epurator = new Epurator(ast);
-    epurator.getSource();
+const evaluatedASTStream = evaluator.getEvaluatedASTStream();
+
+evaluatedASTStream.subscribe(ast => {
+    console.log(ast);
 });
 
-crawler.start();
+evaluator.start();
 

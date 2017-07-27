@@ -10,7 +10,7 @@ export interface IResolverModule {
 export class Resolver {
     cwd: string
 
-    constructor(cwd = process.cwd()) {
+    constructor(cwd: string = process.cwd()) {
         this.cwd = cwd;
     }
 
@@ -27,7 +27,7 @@ export class Resolver {
         return require.resolve(fullPath);
     }
 
-    isDependencyModule(id) {
+    isDependencyModule(id): boolean {
         return (
             id.indexOf('@') === 0
             || id.indexOf(separator) < 0
