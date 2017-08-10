@@ -1,3 +1,4 @@
+import * as jscodeshift from 'jscodeshift';
 import { Observable, Subject } from 'rxjs/Rx';
 import { File } from 'babel-types';
 import Crawler from './Crawler';    
@@ -21,8 +22,30 @@ export default class Evaluator {
     }
 
     enrich(ast: File): void {
-        ast.evaluation = {};
-        ast.program.body.forEach(this.needANameHere(ast.evaluation));
+        const collection = jscodeshift(ast);
+        ast.map = {};
+        // ast.program.body.forEach(this.needANameHere(ast.evaluation));
+
+        collection
+            .find(jscodeshift.FunctionDeclaration)
+            .forEach(function (path) {
+                ast.map[path.value.start] = 'create ' + path.value.id.name;
+                ast.map[path.value.end] = 'close ' + path.value.id.name;                
+            });
+        
+        collection
+            .find(jscodeshift.CallExpression)
+            .forEach(function (path) {
+                ast.map[path.value.start] = 'call ' + path.value.callee.name;
+            });
+        
+        collection
+            .find(jscodeshift.ReturnStatement)
+            .forEach(function (path) {
+                ast.map[path.value.start] = 'return ' + path.value.argument.name;
+            });
+        
+        console.log(ast.map);
 
         return ast;
     }

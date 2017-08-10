@@ -10,7 +10,7 @@ const evaluator = new Evaluator(crawler);
 const evaluatedASTStream = evaluator.getEvaluatedASTStream();
 
 evaluatedASTStream.subscribe(ast => {
-    console.log(ast);
+    // console.log(ast.map);
 });
 
 evaluator.start();
