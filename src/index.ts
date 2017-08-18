@@ -1,3 +1,6 @@
+import registerUtils from './jscodeshift-utils';
+
+registerUtils();
 
 import Crawler from './crawler';
 import Scanner from './scanner';
