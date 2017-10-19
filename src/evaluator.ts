@@ -21,23 +21,88 @@ export default class Evaluator {
         this.crawler.start();
     }
 
+    // good lord, even if do not exist, 
+    // please forgive me for the following code...
     enrich(ast: File): void {
         const collection = jscodeshift(ast);
         ast.map = {};
         ast.map2 = [];
-        // ast.program.body.forEach(this.needANameHere(ast.evaluation));
 
-        const a = collection
+        const test = [];
+
+        const scopes = collection
             .getScopes();
         
-        collection
+        const declarations = collection
+            .getDeclarationIdentifierNodes();
+        
+        const usages = collection
             .getUsageIdentifierNodes();
         
-        collection
-            .getUsageIdentifierNodes();
+        scopes.sort((a, b) => a.end - b.end);
 
-        console.log(a);
+        scopes.forEach(sss => { 
+            if (sss.is) return;
 
+            var tree = scopes.reduce((sum, value, index) => {
+                if (value.is) return sum;
+                if (index === scopes.length - 1) return sum;
+
+                if (sum.length === 0) { 
+                    sum.push(value);
+                    value.is = true;
+                    return sum;
+                };
+
+                const last = sum[sum.length - 1];
+
+                if (value.start <= last.start && value.end >= last.end) { 
+                    sum.push(value);
+                    value.is = true;
+                } 
+
+                return sum;
+            }, []);
+
+            if (tree.length === 0) tree.push(sss);
+            test.push(tree);
+        });
+
+        test.forEach(tree => { 
+            tree.forEach(scope => {
+                declarations.forEach(dec => {
+                    if (!dec.used && scope.start <= dec.start && scope.end >= dec.end) {
+                        scope.available.push(dec.name);
+                        dec.used = true;
+                    }
+                });
+
+                usages.forEach(usage => {
+                    if (!usage.used && scope.start <= usage.start && scope.end >= usage.end) {
+                        scope.usage.push(usage.name);
+                        usage.used = true;
+                    }
+                });
+            });
+
+            var prev = [];
+
+            tree.reverse().forEach(scope => {
+                var merge = [
+                    ...prev,
+                    ...scope.available
+                ];
+
+                scope.available = merge.reduce((newm, val) => {
+                    if (!newm.includes(val)) newm.push(val);
+                    return newm
+                }, []);
+
+                prev = scope.available;
+            });
+        });
+
+        test.forEach(tree => console.log(tree));
         return ast;
     }
 

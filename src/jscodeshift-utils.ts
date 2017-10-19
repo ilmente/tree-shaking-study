@@ -3,7 +3,8 @@ import * as jscodeshift from 'jscodeshift';
 export interface IScope { 
     start: number    
     end: number,
-    scope: any[],
+    is: null,
+    available: any[],
     usage: any[]
 }
 
@@ -19,7 +20,8 @@ function getScope(node: jscodeshift.Node): IScope {
     return {
         start: node.start,
         end: node.end,
-        scope: [],
+        is: null,
+        available: [],
         usage: []
     }
 }
