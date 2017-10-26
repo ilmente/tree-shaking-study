@@ -1,6 +1,6 @@
 function a() {
     function b() {
-        console.log('letter b');
+        alert();
     }
 
     b();

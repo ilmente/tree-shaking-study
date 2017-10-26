@@ -41,6 +41,8 @@ export default class Evaluator {
         
         scopes.sort((a, b) => a.end - b.end);
 
+        // scopes.forEach(tree => console.log(tree));
+
         scopes.forEach(sss => { 
             if (sss.is) return;
 
@@ -72,14 +74,14 @@ export default class Evaluator {
             tree.forEach(scope => {
                 declarations.forEach(dec => {
                     if (!dec.used && scope.start <= dec.start && scope.end >= dec.end) {
-                        scope.available.push(dec.name);
+                        scope.declared.push(dec.name);
                         dec.used = true;
                     }
                 });
 
                 usages.forEach(usage => {
                     if (!usage.used && scope.start <= usage.start && scope.end >= usage.end) {
-                        scope.usage.push(usage.name);
+                        scope.used.push(usage.name);
                         usage.used = true;
                     }
                 });
@@ -88,20 +90,29 @@ export default class Evaluator {
             var prev = [];
 
             tree.reverse().forEach(scope => {
-                var merge = [
+                scope.available = [
                     ...prev,
-                    ...scope.available
+                    ...scope.declared
                 ];
-
-                scope.available = merge.reduce((newm, val) => {
-                    if (!newm.includes(val)) newm.push(val);
-                    return newm
-                }, []);
 
                 prev = scope.available;
             });
         });
 
+        const program = test[test.length - 1][0];
+
+        test.forEach((tree, index) => {
+            if (test.length - 1 === index) return;
+            
+            tree.map(scope => {
+                scope.available = [
+                    ...program.declared,
+                    ...scope.available
+                ]
+            });
+        });
+
+        console.log('\n-----------');
         test.forEach(tree => console.log(tree));
         return ast;
     }

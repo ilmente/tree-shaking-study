@@ -4,8 +4,9 @@ export interface IScope {
     start: number    
     end: number,
     is: null,
+    declared: any[],
     available: any[],
-    usage: any[]
+    used: any[]
 }
 
 function concat(arrayA: any[], arrayB: any[]): any[] { 
@@ -16,14 +17,19 @@ function flatten(...arrays: Array<any[]>): any[] {
     return arrays.reduce(concat, []);
 }
 
-function getScope(node: jscodeshift.Node): IScope { 
+function getScope(start: number, end: number): IScope { 
     return {
-        start: node.start,
-        end: node.end,
+        start,
+        end,
         is: null,
+        declared: [],
         available: [],
-        usage: []
+        used: []
     }
+}
+
+function getScopeFromNode(node: jscodeshift.Node): IScope {
+    return getScope(node.start, node.end);
 }
 
 const utils = {
@@ -31,11 +37,11 @@ const utils = {
         const program = this
             .find(jscodeshift.Program)
             .nodes()
-            .map(getScope); 
+            .map(getScopeFromNode); 
 
         const functions = this
             .getFunctionDeclarationNodes()
-            .map(getScope); 
+            .map(declaration => getScope(declaration.id.end, declaration.body.end));
         
         return flatten(
             program,
@@ -43,10 +49,19 @@ const utils = {
         );
     },
 
-    getFunctionDeclarationNodes: function (): jscodeshift.Node[] { 
-        return this
+    getFunctionDeclarationNodes: function (): jscodeshift.Node[] {
+        const functionDeclarations = this
             .find(jscodeshift.FunctionDeclaration)
             .nodes();
+        
+        const functionExpressions = this
+            .find(jscodeshift.FunctionExpression)
+            .nodes();
+
+        return flatten(
+            functionDeclarations,
+            functionExpressions
+        );
     },
 
     getDeclarationIdentifierNodes: function (): jscodeshift.Node[] {
