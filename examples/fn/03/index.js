@@ -2,7 +2,7 @@ function a() {
     function b() {
         console.log('letter b');
         
-        return function() {
+        return function hh() {
             b();
         }
     }

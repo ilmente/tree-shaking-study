@@ -1,6 +1,6 @@
 import { node as jscsNode } from 'jscodeshift';
 
-export abstract class BaseNode {
+export class Node {
     name: string = ''
     start: number
     end: number
@@ -20,12 +20,6 @@ export abstract class BaseNode {
 
     get isConsumed(): boolean {
         return this.consumed;
-    }
-}
-
-export class Node extends BaseNode {
-    constructor(node: jscsNode) {
-        super(node);
     }
 }
 

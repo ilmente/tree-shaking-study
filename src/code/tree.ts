@@ -1,22 +1,29 @@
 import { node as jscsNode } from 'jscodeshift';
-import { Scope, createScope } from './scope';
+import { Scope } from './scope';
+import { Node } from './node';
 
-export class Tree { 
+export default class Tree { 
+    forest: Array<Scope[]> = []
     scopes: Scope[]
-    paths: Array<Scope[]> = []
+    declarations: Node[]
+    usages: Node[]
     
-    constructor(scopes: jscsNode[]) { 
-        this.scopes = scopes.map(createScope);
+    constructor(scopes: Scope[], declarations: Node[], usages: Node[]) { 
+        this.scopes = scopes;
+        this.declarations = declarations;
+        this.usages = usages;
+        
         this.init();
+        this.populate();
+        this.applyGlobalContext();
     }
 
     init() { 
-        this
-            .scopes
-            .forEach(scope => {
+        this.scopes
+            .map(scope => {
                 if (scope.isConsumed) return;
 
-                let tree = this.scopes.reduce((path, node, nodeIndex) => {
+                const tree = this.scopes.reduce((path, node, nodeIndex) => {
                     if (node.isConsumed || nodeIndex === this.scopes.length - 1) return path;
 
                     if (path.length === 0) {
@@ -36,8 +43,52 @@ export class Tree {
                 }, []);
 
                 if (tree.length === 0) tree.push(scope);
-                this.paths.push(tree);
+                this.forest.push(tree);
             });
+    }
+
+    populate() { 
+        this.forest.forEach(tree => {
+            var prev = [];
+
+            tree
+                .map(scope => {
+                    scope.register(this.declarations, this.usages)
+                    return scope;
+                })
+                .reverse()
+                .map(scope => {
+                    scope.available = [
+                        ...prev,
+                        ...scope.declared
+                    ];
+
+                    prev = scope.available;
+                    return scope;
+                });
+        });
+    }
+
+    applyGlobalContext() { 
+        const length = this.forest.length - 1;
+        const program = this.forest[length][0];
+
+        this.forest.forEach((tree, index) => {
+            if (length === index) return;
+
+            tree.map(scope => {
+                scope.available = [
+                    ...program.declared,
+                    ...scope.available
+                ]
+            });
+        });
+    }
+
+    print() { 
+        this.forest.forEach(tree => { 
+            tree.forEach(scope => console.log(scope));
+        });
     }
 
 }
