@@ -1,82 +1,80 @@
 import { node as jscsNode } from 'jscodeshift';
-import { Scope } from './scope';
-import { Node } from './node';
+import Scope from './scope';
+import Node from './node';
 
-export default class Tree { 
-    forest: Array<Scope[]> = []
-    scopes: Scope[]
-    declarations: Node[]
-    usages: Node[]
+export default class scopePath { 
+    scopePaths: Array<Scope[]> = []
     
     constructor(scopes: Scope[], declarations: Node[], usages: Node[]) { 
-        this.scopes = scopes;
-        this.declarations = declarations;
-        this.usages = usages;
-        
-        this.init();
-        this.populate();
+        this.createScopePaths(scopes);
+        this.populateScopePaths(declarations, usages);
         this.applyGlobalContext();
     }
 
-    init() { 
-        this.scopes
-            .map(scope => {
-                if (scope.isConsumed) return;
+    createScopePaths(scopes: Scope[]) { 
+        const scopeLastIndex = scopes.length - 1;
 
-                const tree = this.scopes.reduce((path, node, nodeIndex) => {
-                    if (node.isConsumed || nodeIndex === this.scopes.length - 1) return path;
+        scopes.map(scope => {
+            if (scope.isConsumed) return;
 
-                    if (path.length === 0) {
-                        path.push(node);
-                        node.consume();
-                        return path;
-                    };
+            const scopePath = scopes.reduce((path, scope, scopeIndex) => {
+                if (scope.isConsumed || scopeIndex === scopeLastIndex) return path;
 
-                    const previousNode = path[path.length - 1];
-
-                    if (node.start <= previousNode.start && node.end >= previousNode.end) {
-                        path.push(node);
-                        node.consume();
-                    }
-
+                if (path.length === 0) {
+                    path.push(scope);
+                    scope.consume();
                     return path;
-                }, []);
+                };
 
-                if (tree.length === 0) tree.push(scope);
-                this.forest.push(tree);
-            });
+                const previousScopeiousScope = path[path.length - 1];
+
+                if (scope.start <= previousScopeiousScope.start && scope.end >= previousScopeiousScope.end) {
+                    path.push(scope);
+                    scope.consume();
+                }
+
+                return path;
+            }, []);
+
+            if (scopePath.length === 0) {
+                scopePath.push(scope);
+            }
+
+            this.scopePaths.push(scopePath);
+            return scope;
+        });
     }
 
-    populate() { 
-        this.forest.forEach(tree => {
-            var prev = [];
+    populateScopePaths(declarations: Node[], usages: Node[]) { 
+        this.scopePaths.map(scopePath => {
+            var previouslyAvailable = [];
 
-            tree
+            return scopePath
                 .map(scope => {
-                    scope.register(this.declarations, this.usages)
+                    scope.register(declarations, usages)
                     return scope;
                 })
                 .reverse()
                 .map(scope => {
                     scope.available = [
-                        ...prev,
+                        ...previouslyAvailable,
                         ...scope.declared
                     ];
 
-                    prev = scope.available;
+                    previouslyAvailable = scope.available;
                     return scope;
                 });
         });
     }
 
     applyGlobalContext() { 
-        const length = this.forest.length - 1;
-        const program = this.forest[length][0];
+        const length = this.scopePaths.length - 1;
+        const program = this.scopePaths[length][0];
 
-        this.forest.forEach((tree, index) => {
+        this.scopePaths.map((scopePath, index) => {
             if (length === index) return;
 
-            tree.map(scope => {
+            scopePath.map(scope => {
                 scope.available = [
                     ...program.declared,
                     ...scope.available
@@ -86,8 +84,8 @@ export default class Tree {
     }
 
     print() { 
-        this.forest.forEach(tree => { 
-            tree.forEach(scope => console.log(scope));
+        this.scopePaths.forEach(scopePath => { 
+            scopePath.forEach(console.log);
         });
     }
 

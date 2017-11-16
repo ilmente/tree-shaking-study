@@ -1,13 +1,5 @@
 import * as jscodeshift from 'jscodeshift';
-
-export interface IScope { 
-    start: number    
-    end: number,
-    is: null,
-    declared: any[],
-    available: any[],
-    used: any[]
-}
+import { IScope } from './code/Scope';
 
 function concat(arrayA: any[], arrayB: any[]): any[] { 
     return arrayA.concat(arrayB);
@@ -17,19 +9,11 @@ function flatten(...arrays: Array<any[]>): any[] {
     return arrays.reduce(concat, []);
 }
 
-function getScope(start: number, end: number): IScope { 
+function createScope(start: number, end: number): IScope { 
     return {
         start,
-        end,
-        is: null,
-        declared: [],
-        available: [],
-        used: []
-    }
-}
-
-function getScopeFromNode(node: jscodeshift.Node): IScope {
-    return getScope(node.start, node.end);
+        end
+    };
 }
 
 const utils = {
@@ -37,15 +21,17 @@ const utils = {
         const program = this
             .find(jscodeshift.Program)
             .nodes()
-            .map(getScopeFromNode); 
+            .map(node => createScope(node.start, node.end));
 
         const functions = this
             .getFunctionDeclarationNodes()
-            .map(declaration => getScope(declaration.id.end, declaration.body.end));
+            .map(node => createScope(node.id.end, node.body.end));
         
         return flatten(
             program,
             functions
+        ).sort(
+            (a, b) => a.end - b.end
         );
     },
 

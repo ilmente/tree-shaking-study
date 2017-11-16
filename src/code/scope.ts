@@ -1,13 +1,17 @@
-import { node as jscsNode } from 'jscodeshift';
-import { Node } from './node';
+import Node from './node';
 
-export class Scope { 
+export interface IScope {
     start: number
     end: number
-    declared: Node[] = []
+}
+
+export default class Scope implements IScope { 
+    readonly start: number
+    readonly end: number
+    readonly declared: Node[] = []
+    readonly used: Node[] = []
     available: Node[] = []
-    used: Node[] = []
-    consumed: boolean = false
+    isConsumed: boolean = false
 
     constructor(start: number, end: number) {
         this.start = start;
@@ -18,9 +22,9 @@ export class Scope {
         declarations.map(this.registerDeclaration.bind(this));
         usages.map(this.registerUsage.bind(this));
 
-        // this.available = [
-        //     ...this.used
-        // ];
+        this.available = [
+            ...this.used
+        ];
     }
 
     registerDeclaration(declaration: Node): Node { 
@@ -42,15 +46,6 @@ export class Scope {
     }
 
     consume() {
-        this.consumed = true;
-    }
-
-    get isConsumed(): boolean {
-        return this.consumed;
+        this.isConsumed = true;
     }
 }
-
-export function createScope(node: jscsNode): Scope {
-    return new Scope(node.start, node.end);
-}
-

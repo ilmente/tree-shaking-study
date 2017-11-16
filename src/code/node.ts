@@ -1,11 +1,11 @@
 import { node as jscsNode } from 'jscodeshift';
 
-export class Node {
-    name: string = ''
-    start: number
-    end: number
-    node: jscsNode = null
-    consumed: boolean = false
+export default class Node {
+    readonly name: string
+    readonly start: number
+    readonly end: number
+    readonly node: jscsNode
+    isConsumed: boolean = false
 
     constructor(node: jscsNode) {
         this.name = node.name;
@@ -15,14 +15,6 @@ export class Node {
     }
 
     consume() {
-        this.consumed = true;
+        this.isConsumed = true;
     }
-
-    get isConsumed(): boolean {
-        return this.consumed;
-    }
-}
-
-export function createNode(node: jscsNode): Node {
-    return new Node(node);
 }
