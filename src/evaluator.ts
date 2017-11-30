@@ -39,8 +39,30 @@ export default class Evaluator {
         const declarations = collection.getDeclarationIdentifierNodes().map(this.createNode);
         const usages = collection.getUsageIdentifierNodes().map(this.createNode);
         const tree = new Tree(scopes, declarations, usages);
+        
+        tree.process(collection);
+        // tree.print();
 
-        tree.print();
+        // tree.available.map(node => { 
+        //     // if (node.usages > 0) { 
+                
+        //     // }
+            
+        //     collection.remove(node);
+
+        //     return node;
+        // });
+
+        console.log(collection.toSource());
+
+        // collection.TEST().forEach(node => {
+        //     node.TEST = true;
+        //     // console.log(node)
+        // })
+
+        // const e = collection.TEST().forEach(node => {
+        //     console.log(node)
+        // })
 
         return ast;
     }

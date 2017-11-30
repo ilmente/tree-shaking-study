@@ -12,9 +12,14 @@ export default class Node {
         this.start = node.start;
         this.end = node.end;
         this.node = node;
+        this.node.usages = 0;
     }
 
     consume() {
         this.isConsumed = true;
+    }
+
+    preserve() { 
+        this.node.usages += 1;
     }
 }

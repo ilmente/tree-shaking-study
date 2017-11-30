@@ -83,6 +83,12 @@ const utils = {
             .find(jscodeshift.Identifier)
             .nodes()
             .filter(identifier => !declarationIdentifierNodes.includes(identifier));
+    },
+
+    TEST: function (): jscodeshift.Node[] {
+        return this
+            .find(jscodeshift.FunctionDeclaration)
+            .nodes();
     }
 }
 

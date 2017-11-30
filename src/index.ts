@@ -7,7 +7,7 @@ import Scanner from './scanner';
 import Evaluator from './evaluator';
 
 const cwd = process.cwd();
-const crawler = new Crawler('./examples/fn/03');
+const crawler = new Crawler('./examples/fn/02');
 const evaluator = new Evaluator(crawler);
 
 const evaluatedASTStream = evaluator.getEvaluatedASTStream();
