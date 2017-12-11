@@ -4,11 +4,13 @@ function a() {
     }
 
     b();
+
+    return function() {}
 }
 
 function c() {
-    function b() {
-        console.log('another letter b');
+    function b(text) {
+        console.log(text);
     }
 
     return b;

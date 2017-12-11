@@ -1,5 +1,4 @@
 import * as jscodeshift from 'jscodeshift';
-import { IScope } from './code/Scope';
 
 function concat(arrayA: any[], arrayB: any[]): any[] { 
     return arrayA.concat(arrayB);
@@ -9,86 +8,45 @@ function flatten(...arrays: Array<any[]>): any[] {
     return arrays.reduce(concat, []);
 }
 
-function createScope(start: number, end: number): IScope { 
-    return {
-        start,
-        end
-    };
+function functionDeclarationsFilter(call, caller) { 
+    if (call.value.callee && caller.value.id) {
+        return call.value.callee.name === caller.value.id.name;
+    }
+
+    return false;
+}
+
+function statementDeclarationsFilter(statement, caller) { 
+    if (statement.value.argument && caller.value.id) {
+        return statement.value.argument.name === caller.value.id.name;
+    }
+
+    return false;
 }
 
 const utils = {
-    getScopes: function (): IScope[] {
-        const program = this
-            .find(jscodeshift.Program)
-            .nodes()
-            .map(node => createScope(node.start, node.end));
-
-        const functions = this
-            .getFunctionDeclarationNodes()
-            .map(node => createScope(node.id.end, node.body.end));
+    markFunctions: function (): void {
+        this
+            .find(jscodeshift.CallExpression)
+            .first('Function', functionDeclarationsFilter)
+            .mark();
         
-        return flatten(
-            program,
-            functions
-        ).sort(
-            (a, b) => a.end - b.end
-        );
-    },
-
-    getFunctionDeclarationNodes: function (): jscodeshift.Node[] {
-        const functionDeclarations = this
-            .find(jscodeshift.FunctionDeclaration)
-            .nodes();
+        this
+            .find(jscodeshift.ReturnStatement)
+            .first('Function', statementDeclarationsFilter)
+            .mark();
         
-        const functionExpressions = this
-            .find(jscodeshift.FunctionExpression)
-            .nodes();
-
-        return flatten(
-            functionDeclarations,
-            functionExpressions
-        );
+        this
+            .find(jscodeshift.ExportNamedDeclaration)
+            .find(jscodeshift.Function)
+            .mark();
     },
 
-    getDeclarationIdentifierNodes: function (): jscodeshift.Node[] {
-        const variableDeclarationIdentifierNodes = this
-            .find(jscodeshift.VariableDeclaration)
-            .nodes()
-            .map(declarator => declarator.declarations)
-            .reduce(concat, [])
-            .map(declaration => declaration.id);
-
-        const functionDeclarationNodes = this
-            .getFunctionDeclarationNodes();
-        
-        const functionDeclarationIdentifierNodes = functionDeclarationNodes
-            .map(declaration => declaration.id);
-
-        const paramIdentifierNodes = functionDeclarationNodes
-            .map(declaration => declaration.params)
-            .reduce(concat, []);
-
-        return flatten(
-            variableDeclarationIdentifierNodes,
-            functionDeclarationIdentifierNodes,
-            paramIdentifierNodes
-        );
-    },
-
-    getUsageIdentifierNodes: function (): jscodeshift.Node[] {
-        const declarationIdentifierNodes = this
-            .getDeclarationIdentifierNodes();
-
-        return this
-            .find(jscodeshift.Identifier)
-            .nodes()
-            .filter(identifier => !declarationIdentifierNodes.includes(identifier));
-    },
-
-    TEST: function (): jscodeshift.Node[] {
+    shake: function (): string { 
         return this
             .find(jscodeshift.FunctionDeclaration)
-            .nodes();
+            .filter(path => !path.keep)
+            .remove();
     }
 }
 
