@@ -1,41 +1,93 @@
+import { dirname, resolve } from 'path';
 import * as babelTypes from 'babel-types';
-import { Observable, Subject } from 'rxjs/Rx';
+import { BehaviorSubject, Observable, Subject } from 'rxjs/Rx';
 import * as jscodeshift from 'jscodeshift';
+import { isDeclaration, increaseReference } from './jscodeshift-util';
+import { default as Crawler, IASTModule} from './crawler';
+import { IResolverModule } from './resolver';
+
+export interface IMonitorModule {
+    fullPath: string,
+    processed: boolean
+}
 
 export default class Scanner {
-    astStream: Observable<babelTypes.File>
-    astStreamModded: Subject<babelTypes.File> = new Subject<babelTypes.File>();
+    astListStream: BehaviorSubject<babelTypes.File[]> = new BehaviorSubject([])
+    crawler: Crawler
+    inputStream: Observable<babelTypes.File>
+    stack: IMonitorModule[] = []
 
-    constructor(astStream: Observable<babelTypes.File>) { 
-        this.astStream = astStream;
-        this.scanASTStream();
+    constructor(crawler: Crawler) { 
+        console.log('Scanner init');
+        this.crawler = crawler;
+
+        this.start();
     }
 
-    scanASTStream(): void {
-        this.astStream.subscribe({
-            next: (ast: babelTypes.File) => {
-                const astCollectionOriginal: jscodeshift.Collection = jscodeshift(ast);
-                const astModded = this.scanASTCollection(astCollectionOriginal).getAST();
+    getASTStream(): Observable<IASTModule> {
+        console.log('Getting AST stream from crawler');
+        const astModuleStream: Observable<IASTModule> = this.crawler.discover();
 
-                this.astStreamModded.next(astModded);
-            }, 
-            error: (err: Error) => {
-                console.error(err);
-            },
-            complete: () => {
-                console.log('Scanning completed');
-            }
-        });
+        return astModuleStream;
     }
 
-    scanASTCollection(astCollection: jscodeshift.Collection): jscodeshift.Collection {
-        const identifiers: Subject<jscodeshift.Identifier> = new Subject<jscodeshift.Identifier>();
+    // scanImport(): void {
+    //     this.astListStream.subscribe({
+    //         next: ((astList: babelTypes.File[]) => {
+    //             if (astList && astList.length > 1) {
+    //                 console.info('Processing list of ' + astList.length + ' AST...');
+    //                 const listMonitor: Observable<babelTypes.File> = Observable.from(astList);
+
+    //                 listMonitor.subscribe({
+    //                     next: (ast: babelTypes.File) => {
+    //                         jscodeshift(ast)
+    //                             .find(jscodeshift.ImportDeclaration)
+    //                             .forEach(nodePath => {
+    //                                 const importedModuleFullPath: string = resolve(this.crawler.sourceDir, nodePath.node.source.value + '.js');
+    //                                 console.info('Found imported module [' + importedModuleFullPath + ']');
+
+    //                                 const importedModuleAst: babelTypes.File = astList
+    //                                     .find((moduleAst: babelTypes.File) => {
+    //                                         return moduleAst[0].value.program.loc.filename === importedModuleFullPath;
+    //                                     });
+
+    //                                 this.scanDeclaration(importedModuleAst, importedModuleFullPath);
+    //                             });
+    //                     },
+    //                     error: (err: Error) => {
+    //                         console.error(err);
+    //                     },
+    //                     complete: () => {
+    //                         console.log('List monitor stream completed');
+    //                     }
+    //                 });
+    //             }
+    //         }),
+    //         error: (err: Error) => {
+    //             console.error(err);
+    //         },
+    //         complete: () => {
+    //             console.log('Scanning cross module: level 2 completed');
+    //         }
+    //     });
+    // }
+
+    /**
+     * Add number of references to declarations in a given AST
+     * @param ast
+     * @param identifierName
+     */
+    scanDeclaration(astModule: IASTModule, identifierName: string = ''): IASTModule {
+        const astCollection: jscodeshift.Collection = jscodeshift(astModule.ast);
+        const identifiers: Observable<jscodeshift.Identifier> = Observable.from(astCollection.find(jscodeshift.Identifier).__paths);
 
         identifiers.subscribe({
             next: (identifierNodePath) => {
-                const identifierName = identifierNodePath.node.name;
+                if (identifierName === '') {
+                    identifierName = identifierNodePath.node.name;
+                }
 
-                if (!this.isDeclaration(identifierNodePath.parent)) {
+                if (!isDeclaration(identifierNodePath.parent)) {
                     astCollection
                         .find(jscodeshift.FunctionDeclaration, {
                             id: {
@@ -43,13 +95,9 @@ export default class Scanner {
                             }
                         })
                         .forEach(nodePath => {
-                            if (parseInt(nodePath['references']) > -1) {
-                                nodePath.references++;
-                            } else {
-                                nodePath['references'] = 1;
-                            }
+                            increaseReference(nodePath);
                         });
-                        
+
                     astCollection
                         .find(jscodeshift.VariableDeclarator, {
                             id: {
@@ -57,12 +105,8 @@ export default class Scanner {
                             }
                         })
                         .forEach(nodePath => {
-                            if (parseInt(nodePath['references']) > -1) {
-                                nodePath.references++;
-                            } else {
-                                nodePath['references'] = 1;
-                            }
-                        });    
+                            increaseReference(nodePath);
+                        });
                 }
             },
             error: (err: Error) => {
@@ -72,25 +116,56 @@ export default class Scanner {
                 console.log('Identifiers stream completed');
             }
         });
+        
+        astModule.ast = astCollection.getAST();
+        return astModule;
+    }
 
-        astCollection
-            .find(jscodeshift.Identifier)
-            .forEach(nodePath => {
-                identifiers.next(nodePath); 
+    start(): void {
+        console.log('Scanner start');
+        const astModuleStream: Observable<IASTModule> = this.getASTStream();
+
+        const astModuleStreamObserver = astModuleStream
+            .subscribe({
+                next: (astModule: IASTModule) => {
+                    console.log('Scanner received [' + astModule.fullPath + ']');
+
+                    this.stack.push(<IMonitorModule>{
+                        fullPath: astModule.fullPath,
+                        processed: false
+                    });
+
+                    console.log('Stack contains [' + this.stack.length + '] modules');
+
+                    astModule.ast = this.scanDeclaration(astModule).ast;
+                    astModule.deps.forEach((dep: IResolverModule) => 
+                        this.crawler.filesStream.next(dep)
+                    );
+                    this.updateStack(astModule.fullPath);
+
+                    console.log('---- STACK  BEGIN ----------');
+                    console.info(this.stack);
+                    console.log('---- STACK  END ------------');
+
+                    if (this.stack.every((item) => item.processed)) {
+                        this.crawler.filesStream.complete();
+                    }
+                }, 
+                error: (err: Error) => {
+                    console.error(err);
+                },
+                complete: () => {
+                    console.log('Scanner completed');
+                }
             });
-
-        return astCollection;
     }
 
-    getASTStream(): any {
-        return this.astStreamModded;
-    }
-
-    isDeclaration(nodePath: jscodeshift.NodePath): boolean {
-        if (nodePath && nodePath.node && nodePath.node.type && (nodePath.node.type == jscodeshift.VariableDeclarator || nodePath.node.type == jscodeshift.FunctionDeclaration)) {
-            return true;
-        }
-
-        return false;
-    }
+    updateStack(fullPath: string): void {
+        this.stack = this.stack.map((item: IMonitorModule) => {
+            if (item.fullPath === fullPath) {
+                item.processed = true;
+            }
+            return item;
+        });
+    } 
 }

@@ -1,79 +1,94 @@
 import { readFileSync } from 'fs';
-import { dirname } from 'path';
+import { dirname, resolve } from 'path';
 import { Observable, Subject } from 'rxjs/Rx';
 import * as babylon from 'babylon';
 import * as babelTypes from 'babel-types';
 import * as jscodeshift from 'jscodeshift';
 import { IResolverModule, Resolver } from './resolver';
 
-export interface ICrawlerModule { 
+export interface IASTModule extends ICrawlerModule {
+    ast: babelTypes.File,
+    deps: IResolverModule[],
+    processed: boolean
+}
+
+export interface ICrawlerModule {
     code: string,
     fullPath: string
 }
 
 export default class Crawler { 
+    astStream: Observable<IASTModule>
     encoding: string
     entryPoint: string
-    resolver: Resolver
-    filesSubject: Subject<IResolverModule>
+    filesStream: Subject<IResolverModule> = new Subject<IResolverModule>()
+    resolver: Resolver = new Resolver()
+    sourceDir: string
 
-    constructor(entryPoint: string, encoding: string = 'utf8') { 
+    constructor(entryPoint: string, encoding: string = 'utf8') {
+        console.log('Crawler init');
         this.entryPoint = entryPoint;
+        this.sourceDir = dirname(resolve(entryPoint));
         this.encoding = encoding;
-        this.resolver = new Resolver();
-        this.filesSubject = new Subject<IResolverModule>();
+        console.log('Folder ['  + this.sourceDir + ']');
     }
 
-    getASTStream() { 
-        const self = this;
-
-        const astStream: Observable<babelTypes.File> = this.filesSubject
+    discover(): Observable<IASTModule> {
+        return this.filesStream
+            .asObservable()
             .map((dep: IResolverModule) => this.resolver.resolve(dep))
-            .map((fullPath: string) => (
-                <ICrawlerModule>{
+            .map((fullPath: string): ICrawlerModule => {
+                console.log('Processing file [' + fullPath + ']');
+                
+                return <ICrawlerModule>{
                     code: readFileSync(fullPath, this.encoding),
                     fullPath
                 }
-            ))
-            .map((module: ICrawlerModule) => this.getAST(module))
-            .share();
+            })
+            .map((module: ICrawlerModule): IASTModule => {
+                console.log('Obtaining AST for [' + module.fullPath + ']');
+                                
+                return <IASTModule>{
+                    ast: this.getAST(module),
+                    code: module.code,
+                    fullPath: module.fullPath,
+                    processed: false
+                };
+            })
+            .map((astModule: IASTModule): IASTModule => {
+                const deps: IResolverModule[] = [];
 
-        astStream.subscribe({
-            next: (ast: babelTypes.File) => {
-                jscodeshift(ast)
+                jscodeshift(astModule.ast)
                     .find(jscodeshift.ImportDeclaration)
                     .forEach((nodePath) => {
-                        const dependency: IResolverModule = {
+                        console.log('Found dependency [' + nodePath.value.source.value + ']');
+
+                        deps.push(<IResolverModule>{
                             id: nodePath.value.source.value,
-                            context: dirname(nodePath.value.loc.filename),
-                        };
-
-                        self.filesSubject.next(dependency);
+                            context: dirname(nodePath.value.loc.filename)
+                        });
                     });
-            }, 
-            error: (err: Error) => {
-                console.error(err);
-            },
-            complete: () => {
-                console.log('end');
-            }
-        });
 
-        return astStream;
+                astModule.deps = deps;
+
+                return astModule;                
+            })
+            .share();
     }
 
-    start() { 
-        this.filesSubject.next(<IResolverModule>{
-            id: this.entryPoint
-        });
-    }
-
-    getAST(module: ICrawlerModule) { 
+    getAST(module: ICrawlerModule): babelTypes.File { 
         return babylon.parse(module.code, <babylon.BabylonOptions>{
             allowImportExportEverywhere: true,
             sourceFilename: module.fullPath,
             sourceType: 'module'
-        })  
+        });  
     }
 
+    start(): void { 
+        console.log('Crawler start');
+
+        this.filesStream.next(<IResolverModule>{
+            id: this.entryPoint
+        });
+    }
 }
